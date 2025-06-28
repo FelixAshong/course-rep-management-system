@@ -1,4 +1,3 @@
-import React, { useState, useContext } from 'react';
 import React, { useState } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
@@ -31,7 +30,6 @@ import {
   QrCode,
   Feedback,
   Notifications,
-  AccountCircle,
   Logout,
   Settings,
   NotificationsActive,
@@ -116,7 +114,6 @@ const menuItems = [
 
 const MotionBox = motion(Box);
 const MotionListItem = motion(ListItem);
-const MotionCard = motion(Box);
 
 function Layout() {
   const [mobileOpen, setMobileOpen] = useState(false);
