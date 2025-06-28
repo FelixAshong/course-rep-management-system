@@ -214,4 +214,73 @@ IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_feedback_studentid')
 CREATE INDEX idx_feedback_studentid ON feedback(studentId);
 
 IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_verification_student_id')
-CREATE INDEX idx_verification_student_id ON verification(student_id); 
+CREATE INDEX idx_verification_student_id ON verification(student_id);
+
+-- Add new tables for chat functionality
+CREATE TABLE conversations (
+    conversationId INT IDENTITY(1,1) PRIMARY KEY,
+    title NVARCHAR(255) NOT NULL,
+    type NVARCHAR(50) NOT NULL DEFAULT 'direct', -- 'direct', 'group', 'course'
+    createdAt DATETIME2 DEFAULT GETDATE()
+);
+
+CREATE TABLE conversationParticipants (
+    participantId INT IDENTITY(1,1) PRIMARY KEY,
+    conversationId INT NOT NULL,
+    userId INT NOT NULL,
+    joinedAt DATETIME2 DEFAULT GETDATE(),
+    FOREIGN KEY (conversationId) REFERENCES conversations(conversationId) ON DELETE CASCADE,
+    FOREIGN KEY (userId) REFERENCES users(userId) ON DELETE CASCADE
+);
+
+CREATE TABLE messages (
+    messageId INT IDENTITY(1,1) PRIMARY KEY,
+    conversationId INT NOT NULL,
+    senderId INT NOT NULL,
+    content NTEXT NOT NULL,
+    createdAt DATETIME2 DEFAULT GETDATE(),
+    FOREIGN KEY (conversationId) REFERENCES conversations(conversationId) ON DELETE CASCADE,
+    FOREIGN KEY (senderId) REFERENCES users(userId) ON DELETE CASCADE
+);
+
+-- Add submission assignments table for better assignment tracking
+CREATE TABLE submissionAssignments (
+    submissionId INT IDENTITY(1,1) PRIMARY KEY,
+    assignmentId INT NOT NULL,
+    studentId INT NOT NULL,
+    submissionDate DATETIME2 DEFAULT GETDATE(),
+    grade DECIMAL(5,2) NULL,
+    feedback NTEXT NULL,
+    status NVARCHAR(50) DEFAULT 'submitted', -- 'submitted', 'graded', 'late'
+    FOREIGN KEY (assignmentId) REFERENCES assignments(assignmentId) ON DELETE CASCADE,
+    FOREIGN KEY (studentId) REFERENCES students(studentId) ON DELETE CASCADE
+);
+
+-- Add indexes for better performance
+CREATE INDEX idx_attendance_student_course ON attendanceInstances(studentId, courseId);
+CREATE INDEX idx_assignments_course ON assignments(courseId);
+CREATE INDEX idx_events_course ON events(courseId);
+CREATE INDEX idx_messages_conversation ON messages(conversationId);
+CREATE INDEX idx_conversation_participants ON conversationParticipants(conversationId, userId);
+CREATE INDEX idx_submission_assignments ON submissionAssignments(assignmentId, studentId);
+
+-- Add some sample data for testing
+INSERT INTO conversations (title, type) VALUES 
+('General Discussion', 'group'),
+('Course CS101 Chat', 'course'),
+('Study Group A', 'group');
+
+-- Insert sample conversation participants
+INSERT INTO conversationParticipants (conversationId, userId) VALUES 
+(1, 1), (1, 2), (1, 3),
+(2, 1), (2, 2), (2, 4),
+(3, 1), (3, 3), (3, 5);
+
+-- Insert sample messages
+INSERT INTO messages (conversationId, senderId, content) VALUES 
+(1, 1, 'Hello everyone!'),
+(1, 2, 'Hi there!'),
+(1, 3, 'How is everyone doing?'),
+(2, 1, 'Any questions about the assignment?'),
+(2, 2, 'I have a question about the deadline'),
+(3, 1, 'Let''s meet tomorrow for study session'); 

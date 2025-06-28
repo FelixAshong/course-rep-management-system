@@ -11,6 +11,9 @@ const assignmentRoute = require('./routes/assignmentRoute');
 const notificationRoute = require('./routes/notificationRoute');
 const feedbackRoute = require('./routes/feedbackRoute');
 const attendanceInstanceRoute = require('./routes/attendanceInstanceRoute');
+const reportRoute = require('./routes/reportRoute');
+const calendarRoute = require('./routes/calendarRoute');
+const chatRoute = require('./routes/chatRoute');
 const app = express();
 
 app.use(cors());
@@ -28,5 +31,8 @@ app.use('/assignment', assignmentRoute);
 app.use('/notification', notificationRoute);
 app.use('/feedback', feedbackRoute);
 app.use('/attendance', attendanceInstanceRoute);
+app.use('/report', reportRoute);
+app.use('/calendar', calendarRoute);
+app.use('/chat', chatRoute);
 
 module.exports = app;

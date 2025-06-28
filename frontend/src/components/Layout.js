@@ -33,6 +33,9 @@ import {
   Logout,
   Settings,
   NotificationsActive,
+  CalendarToday,
+  BarChart,
+  Message,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
@@ -109,6 +112,27 @@ const menuItems = [
     path: '/notifications',
     color: '#f97316',
     gradient: 'linear-gradient(135deg, #f97316 0%, #fb923c 100%)'
+  },
+  { 
+    text: 'Calendar', 
+    icon: <CalendarToday />, 
+    path: '/calendar',
+    color: '#8b5cf6',
+    gradient: 'linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%)'
+  },
+  { 
+    text: 'Reports', 
+    icon: <BarChart />, 
+    path: '/reports',
+    color: '#06b6d4',
+    gradient: 'linear-gradient(135deg, #06b6d4 0%, #22d3ee 100%)'
+  },
+  { 
+    text: 'Chat', 
+    icon: <Message />, 
+    path: '/chat',
+    color: '#10b981',
+    gradient: 'linear-gradient(135deg, #10b981 0%, #34d399 100%)'
   },
 ];
 

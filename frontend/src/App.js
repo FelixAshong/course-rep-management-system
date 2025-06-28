@@ -14,6 +14,9 @@ import Events from './pages/Events';
 import Attendance from './pages/Attendance';
 import Feedback from './pages/Feedback';
 import Notifications from './pages/Notifications';
+import Reports from './pages/Reports';
+import Calendar from './pages/Calendar';
+import Chat from './pages/Chat';
 import Layout from './components/Layout';
 import './App.css';
 
@@ -165,6 +168,9 @@ function App() {
               <Route path="attendance" element={<Attendance />} />
               <Route path="feedback" element={<Feedback />} />
               <Route path="notifications" element={<Notifications />} />
+              <Route path="reports" element={<Reports />} />
+              <Route path="calendar" element={<Calendar />} />
+              <Route path="chat" element={<Chat />} />
             </Route>
           </Routes>
         </Router>
