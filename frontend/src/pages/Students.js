@@ -40,6 +40,10 @@ import {
   LocationOn,
   School as SchoolIcon,
   FilterList,
+  Search,
+  Visibility,
+  VisibilityOff,
+  Lock,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
