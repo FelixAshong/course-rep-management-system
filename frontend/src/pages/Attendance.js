@@ -26,8 +26,27 @@ import {
   FormControlLabel,
   Card,
   CardContent,
+  Grid,
+  Chip,
+  Avatar,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemAvatar,
 } from '@mui/material';
-import { Add, QrCode, Close, Delete, Visibility } from '@mui/icons-material';
+import {
+  QrCodeScanner,
+  CheckCircle,
+  Cancel,
+  Schedule,
+  Person,
+  Event,
+  Add,
+  Edit,
+  Delete,
+  Close,
+  Visibility,
+} from '@mui/icons-material';
 import { QRCodeSVG } from 'qrcode.react';
 import axios from 'axios';
 

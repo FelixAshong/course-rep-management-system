@@ -25,7 +25,16 @@ import {
   Switch,
   FormControlLabel,
 } from '@mui/material';
-import { Add, Edit, Delete } from '@mui/icons-material';
+import {
+  Add,
+  Delete,
+  Star,
+  StarBorder,
+  Send,
+  Reply,
+  ThumbUp,
+  ThumbDown,
+} from '@mui/icons-material';
 import axios from 'axios';
 
 function Feedback() {
