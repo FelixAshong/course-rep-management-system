@@ -17,6 +17,7 @@ A full-stack web application for managing course representatives, assignments, a
 ## Tech Stack
 
 ### Backend
+
 - **Node.js** with Express.js
 - **MySQL** database
 - **JWT** for authentication
@@ -24,6 +25,7 @@ A full-stack web application for managing course representatives, assignments, a
 - **Bcrypt** for password hashing
 
 ### Frontend
+
 - **React.js** with modern hooks
 - **CSS3** for styling
 - **Context API** for state management
@@ -52,6 +54,7 @@ course-rep-management-system/
 ## Getting Started
 
 ### Prerequisites
+
 - Node.js (v14 or higher)
 - MySQL (v8.0 or higher)
 - npm or yarn
@@ -59,24 +62,29 @@ course-rep-management-system/
 ### Installation
 
 1. **Clone the repository**
+
    ```bash
    git clone <repository-url>
    cd course-rep-management-system
    ```
 
 2. **Backend Setup**
+
    ```bash
    cd Backend
    npm install
    ```
 
 3. **Database Setup**
+
    - Create a MySQL database
    - Import the `database_schema.sql` file
    - Configure database connection in `config/db.js`
 
 4. **Environment Variables**
+
    Create a `.env` file in the Backend directory:
+
    ```
    DB_HOST=localhost
    DB_USER=your_username
@@ -88,6 +96,7 @@ course-rep-management-system/
    ```
 
 5. **Frontend Setup**
+
    ```bash
    cd ../frontend
    npm install
@@ -96,44 +105,52 @@ course-rep-management-system/
 ### Running the Application
 
 1. **Start the Backend**
+
    ```bash
    cd Backend
    npm start
    ```
 
 2. **Start the Frontend**
+
    ```bash
    cd frontend
    npm start
    ```
 
 The application will be available at:
+
 - Frontend: http://localhost:3000
 - Backend API: http://localhost:5000
 
 ## API Endpoints
 
 ### Authentication
+
 - `POST /api/auth/login` - User login
 - `POST /api/auth/register` - User registration
 
 ### Courses
+
 - `GET /api/courses` - Get all courses
 - `POST /api/courses` - Create new course
 - `PUT /api/courses/:id` - Update course
 - `DELETE /api/courses/:id` - Delete course
 
 ### Students
+
 - `GET /api/students` - Get all students
 - `POST /api/students` - Add new student
 - `PUT /api/students/:id` - Update student
 
 ### Assignments
+
 - `GET /api/assignments` - Get all assignments
 - `POST /api/assignments` - Create new assignment
 - `PUT /api/assignments/:id` - Update assignment
 
 ### Attendance
+
 - `GET /api/attendance` - Get attendance records
 - `POST /api/attendance` - Mark attendance
 
