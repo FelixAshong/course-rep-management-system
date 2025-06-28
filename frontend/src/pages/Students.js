@@ -34,17 +34,12 @@ import {
   Add,
   Edit,
   Delete,
-  Search,
   Person,
   Email,
   Phone,
   LocationOn,
   School as SchoolIcon,
   FilterList,
-  MoreVert,
-  Visibility,
-  VisibilityOff,
-  Lock,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
