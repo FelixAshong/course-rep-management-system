@@ -1,3 +1,25 @@
+# Course Rep Management System – Frontend
+
+This is the frontend for the Course Representative Management System. It provides a user-friendly interface for students, lecturers, and course representatives to manage courses, assignments, attendance, events, feedback, and notifications.
+
+## Features
+- **Dashboard**: Overview of assignments, events, and notifications
+- **Assignments**: View, submit, and track assignments
+- **Attendance**: Mark and view attendance records
+- **Courses**: Browse and manage enrolled courses
+- **Groups**: Organize and interact with study groups
+- **Events**: View upcoming academic events
+- **Feedback**: Submit and review feedback
+- **Notifications**: Receive real-time updates
+- **Authentication**: Secure login and session management
+
+## Tech Stack
+- React.js (with hooks and Context API)
+- CSS3
+- Communicates with the backend via RESTful API
+
+---
+
 # Getting Started with Create React App
 
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
