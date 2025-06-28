@@ -37,6 +37,7 @@ router.get('/conversations/:userId', async (req, res) => {
       data: results
     });
   } catch (error) {
+    console.error('Error fetching conversations:', error);
     res.status(500).json({
       success: false,
       message: 'Error fetching conversations',
@@ -73,6 +74,7 @@ router.get('/messages/:conversationId', async (req, res) => {
       data: results.reverse()
     });
   } catch (error) {
+    console.error('Error fetching messages:', error);
     res.status(500).json({
       success: false,
       message: 'Error fetching messages',
@@ -119,6 +121,7 @@ router.post('/messages', async (req, res) => {
       data: message[0]
     });
   } catch (error) {
+    console.error('Error sending message:', error);
     res.status(500).json({
       success: false,
       message: 'Error sending message',
@@ -160,6 +163,7 @@ router.post('/conversations', async (req, res) => {
       data: { conversationId, title, type }
     });
   } catch (error) {
+    console.error('Error creating conversation:', error);
     res.status(500).json({
       success: false,
       message: 'Error creating conversation',
@@ -197,6 +201,7 @@ router.get('/course-chat/:courseId', async (req, res) => {
       data: { conversationId: conversation[0].conversationId }
     });
   } catch (error) {
+    console.error('Error getting course chat:', error);
     res.status(500).json({
       success: false,
       message: 'Error getting course chat',
