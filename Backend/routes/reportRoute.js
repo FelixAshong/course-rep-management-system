@@ -20,14 +20,19 @@ router.get('/attendance', async (req, res) => {
     `;
     
     const conditions = [];
+    const params = [];
+    
     if (courseId) {
       conditions.push('c.courseId = ?');
+      params.push(courseId);
     }
     if (startDate) {
       conditions.push('ai.date >= ?');
+      params.push(startDate);
     }
     if (endDate) {
       conditions.push('ai.date <= ?');
+      params.push(endDate);
     }
     
     if (conditions.length > 0) {
@@ -36,7 +41,6 @@ router.get('/attendance', async (req, res) => {
     
     query += ' GROUP BY s.studentId, s.name, s.email ORDER BY attendancePercentage DESC';
     
-    const params = [courseId, startDate, endDate].filter(Boolean);
     const [results] = await db.execute(query, params);
     
     res.json({
@@ -44,6 +48,7 @@ router.get('/attendance', async (req, res) => {
       data: results
     });
   } catch (error) {
+    console.error('Error fetching attendance report:', error);
     res.status(500).json({
       success: false,
       message: 'Error fetching attendance report',
@@ -70,13 +75,14 @@ router.get('/assignments', async (req, res) => {
       LEFT JOIN submissionAssignments sa ON a.assignmentId = sa.assignmentId
     `;
     
+    const params = [];
     if (courseId) {
       query += ' WHERE a.courseId = ?';
+      params.push(courseId);
     }
     
     query += ' GROUP BY a.assignmentId, a.title, a.description, a.dueDate';
     
-    const params = courseId ? [courseId] : [];
     const [results] = await db.execute(query, params);
     
     res.json({
@@ -84,6 +90,7 @@ router.get('/assignments', async (req, res) => {
       data: results
     });
   } catch (error) {
+    console.error('Error fetching assignment report:', error);
     res.status(500).json({
       success: false,
       message: 'Error fetching assignment report',
@@ -125,6 +132,7 @@ router.get('/courses', async (req, res) => {
       data: results
     });
   } catch (error) {
+    console.error('Error fetching course statistics:', error);
     res.status(500).json({
       success: false,
       message: 'Error fetching course statistics',
@@ -136,45 +144,38 @@ router.get('/courses', async (req, res) => {
 // Get dashboard analytics
 router.get('/dashboard', async (req, res) => {
   try {
-    const [
-      studentCount,
-      courseCount,
-      assignmentCount,
-      eventCount,
-      recentActivities
-    ] = await Promise.all([
-      db.execute('SELECT COUNT(*) as count FROM students'),
-      db.execute('SELECT COUNT(*) as count FROM courses'),
-      db.execute('SELECT COUNT(*) as count FROM assignments'),
-      db.execute('SELECT COUNT(*) as count FROM events'),
-      db.execute(`
-        SELECT 
-          'assignment' as type,
-          a.title as title,
-          a.createdAt as date
-        FROM assignments a
-        UNION ALL
-        SELECT 
-          'event' as type,
-          e.title as title,
-          e.createdAt as date
-        FROM events e
-        ORDER BY date DESC
-        LIMIT 10
-      `)
-    ]);
+    const [studentCount] = await db.execute('SELECT COUNT(*) as count FROM students');
+    const [courseCount] = await db.execute('SELECT COUNT(*) as count FROM courses');
+    const [assignmentCount] = await db.execute('SELECT COUNT(*) as count FROM assignments');
+    const [eventCount] = await db.execute('SELECT COUNT(*) as count FROM events');
+    const [recentActivities] = await db.execute(`
+      SELECT 
+        'assignment' as type,
+        a.title as title,
+        a.createdAt as date
+      FROM assignments a
+      UNION ALL
+      SELECT 
+        'event' as type,
+        e.title as title,
+        e.createdAt as date
+      FROM events e
+      ORDER BY date DESC
+      LIMIT 10
+    `);
     
     res.json({
       success: true,
       data: {
-        studentCount: studentCount[0][0].count,
-        courseCount: courseCount[0][0].count,
-        assignmentCount: assignmentCount[0][0].count,
-        eventCount: eventCount[0][0].count,
-        recentActivities: recentActivities[0]
+        studentCount: studentCount[0].count,
+        courseCount: courseCount[0].count,
+        assignmentCount: assignmentCount[0].count,
+        eventCount: eventCount[0].count,
+        recentActivities: recentActivities
       }
     });
   } catch (error) {
+    console.error('Error fetching dashboard analytics:', error);
     res.status(500).json({
       success: false,
       message: 'Error fetching dashboard analytics',

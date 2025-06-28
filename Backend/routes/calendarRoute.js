@@ -39,6 +39,7 @@ router.get('/events', async (req, res) => {
       data: results
     });
   } catch (error) {
+    console.error('Error fetching calendar events:', error);
     res.status(500).json({
       success: false,
       message: 'Error fetching calendar events',
@@ -77,6 +78,7 @@ router.get('/upcoming', async (req, res) => {
       data: results
     });
   } catch (error) {
+    console.error('Error fetching upcoming events:', error);
     res.status(500).json({
       success: false,
       message: 'Error fetching upcoming events',
@@ -126,6 +128,7 @@ router.get('/schedule/:studentId', async (req, res) => {
       data: results
     });
   } catch (error) {
+    console.error('Error fetching student schedule:', error);
     res.status(500).json({
       success: false,
       message: 'Error fetching student schedule',
@@ -177,6 +180,7 @@ router.get('/deadlines', async (req, res) => {
       data: results
     });
   } catch (error) {
+    console.error('Error fetching assignment deadlines:', error);
     res.status(500).json({
       success: false,
       message: 'Error fetching assignment deadlines',
