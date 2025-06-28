@@ -1,4 +1,4 @@
-const { connect } = require('../config/db');
+const db = require('../config/db');
 const {
   generatedId,
   formatDateAndTime,
@@ -7,61 +7,64 @@ const { handleError } = require('../services/errorService');
 const { handleResponse } = require('../services/responseService');
 
 exports.addEvent = async (req, res) => {
-  let client;
   try {
-    const { title, description, date, time, venue } = req.body;
-    client = await connect();
+    const { title, description, startDate, endDate, location, type, courseId } = req.body;
 
-    if (!title || !description || !date || !time || !venue) {
+    if (!title || !description || !startDate || !endDate || !location) {
       return handleError(
         res,
         409,
-        'Title, description, date, time, and venue are required',
+        'Title, description, startDate, endDate, and location are required',
       );
     }
 
     const id = await generatedId('EVT');
-    const { formattedDate, formattedTime } = formatDateAndTime(date, time);
-    const newEvent = await client.query(
-      `INSERT INTO event (id, title, description, date, time, venue)
-            VALUES ($1, $2, $3, $4, $5, $6)
-            RETURNING *`,
-      [id, title, description, formattedDate, formattedTime, venue],
+    const query = `
+      INSERT INTO events (eventId, title, description, startDate, endDate, location, type, courseId, createdAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
+    `;
+    
+    const [result] = await db.execute(query, [
+      id, title, description, startDate, endDate, location, type || 'general', courseId || null
+    ]);
+
+    const [newEvent] = await db.execute(
+      'SELECT * FROM events WHERE eventId = ?',
+      [id]
     );
 
     return handleResponse(
       res,
       201,
       'Event added successfully',
-      newEvent.rows[0],
+      newEvent[0],
     );
   } catch (error) {
+    console.error('Error adding event:', error);
     return handleError(res, 500, 'Error adding event', error);
-  } finally {
-    if (client) {
-      client.release();
-    }
   }
 };
 
 exports.getAllEvent = async (req, res) => {
-  let client;
   try {
-    client = await connect();
-
-    const events = await client.query(
-      `SELECT 
-        id,
+    const query = `
+      SELECT 
+        eventId,
         title,
         description,
-        date,
-        time,
-        venue,
-        created_at
-        FROM event
-        ORDER BY date DESC, time DESC;`,
-    );
-    if (!events.rows.length) {
+        startDate,
+        endDate,
+        location,
+        type,
+        courseId,
+        createdAt
+      FROM events
+      ORDER BY startDate DESC
+    `;
+    
+    const [events] = await db.execute(query);
+    
+    if (!events.length) {
       return handleError(res, 404, 'No Events found');
     }
 
@@ -69,30 +72,24 @@ exports.getAllEvent = async (req, res) => {
       res,
       200,
       'Events retrieved successfully',
-      events.rows,
+      events,
     );
   } catch (error) {
+    console.error('Error retrieving events:', error);
     return handleError(res, 500, 'Error retrieving events', error);
-  } finally {
-    if (client) {
-      client.release();
-    }
   }
 };
 
 exports.eventById = async (req, res) => {
-  let client;
   try {
     const { id } = req.params;
-    client = await connect();
 
-    const event = await client.query(
-      `SELECT * FROM event
-        WHERE id = $1`,
+    const [event] = await db.execute(
+      'SELECT * FROM events WHERE eventId = ?',
       [id],
     );
 
-    if (!event.rows.length) {
+    if (!event.length) {
       return handleError(res, 404, 'Event not found');
     }
 
@@ -100,76 +97,77 @@ exports.eventById = async (req, res) => {
       res,
       200,
       'Event retrieved successfully',
-      event.rows[0],
+      event[0],
     );
   } catch (error) {
+    console.error('Error retrieving event:', error);
     return handleError(res, 500, 'Error retrieving event', error);
-  } finally {
-    if (client) {
-      client.release();
-    }
   }
 };
 
 exports.updateEvent = async (req, res) => {
-  let client;
   try {
     const { id } = req.params;
-    const { title, description, date, time, venue } = req.body;
-    const { formattedDate, formattedTime } = formatDateAndTime(date, time);
-    if (!title || !description || !date || !time || !venue) {
+    const { title, description, startDate, endDate, location, type, courseId } = req.body;
+    
+    if (!title || !description || !startDate || !endDate || !location) {
       return handleError(
         res,
         409,
-        'Title, description, date, time, and venue are required',
+        'Title, description, startDate, endDate, and location are required',
       );
     }
-    client = await connect();
 
-    const updatedEvent = await client.query(
-      `UPDATE event SET 
-        title = $1,
-        description = $2,
-        date = $3,
-        time = $4,
-        venue = $5
-        WHERE id = $6
-        RETURNING *;`,
-      [title, description, formattedDate, formattedTime, venue, id],
-    );
+    const query = `
+      UPDATE events SET 
+        title = ?,
+        description = ?,
+        startDate = ?,
+        endDate = ?,
+        location = ?,
+        type = ?,
+        courseId = ?
+        WHERE eventId = ?
+    `;
+    
+    const [result] = await db.execute(query, [
+      title, description, startDate, endDate, location, type || 'general', courseId || null, id
+    ]);
 
-    if (!updatedEvent.rows.length) {
+    if (result.affectedRows === 0) {
       return handleError(res, 404, 'Event not found for update');
     }
+
+    const [updatedEvent] = await db.execute(
+      'SELECT * FROM events WHERE eventId = ?',
+      [id]
+    );
 
     return handleResponse(
       res,
       200,
       'Event updated successfully',
-      updatedEvent.rows[0],
+      updatedEvent[0],
     );
   } catch (error) {
+    console.error('Error updating event:', error);
     return handleError(res, 500, 'Error updating event', error);
-  } finally {
-    if (client) {
-      client.release();
-    }
   }
 };
 
 exports.deleteEvent = async (req, res) => {
-  let client;
   try {
     const { id } = req.params;
-    client = await connect();
 
-    await client.query(`DELETE FROM event WHERE id = $1`, [id]);
+    const [result] = await db.execute('DELETE FROM events WHERE eventId = ?', [id]);
+    
+    if (result.affectedRows === 0) {
+      return handleError(res, 404, 'Event not found');
+    }
+    
     return handleResponse(res, 200, 'Event deleted successfully');
   } catch (error) {
+    console.error('Error deleting event:', error);
     return handleError(res, 500, 'Error deleting event', error);
-  } finally {
-    if (client) {
-      client.release();
-    }
   }
 };

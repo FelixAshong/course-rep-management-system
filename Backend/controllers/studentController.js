@@ -1,184 +1,192 @@
-const { connect } = require('../config/db');
+const db = require('../config/db');
 const bcrypt = require('bcrypt');
 const { handleError } = require('../services/errorService');
 const { handleResponse } = require('../services/responseService');
 const { sendRegistrationSuccessMail } = require('../services/customEmails');
 
 exports.registerStudent = async (req, res) => {
-  let client;
   try {
-    const { id, name, email, phone, password } = req.body;
-    client = await connect();
-    client.query('BEGIN');
-
-    if (!id || !name || !email || !phone || !password) {
+    const { studentId, name, email, phone, password, courseId } = req.body;
+    
+    if (!studentId || !name || !email || !phone || !password) {
       return handleError(
         res,
         409,
-        'Student Id, name, email, phone, and password are required',
+        'Student ID, name, email, phone, and password are required',
       );
     }
 
-    //Check for existing student with same id
-    const existingStudent = await client.query(
-      `SELECT * FROM student WHERE id = $1`,
-      [id],
+    // Check for existing student with same id
+    const [existingStudent] = await db.execute(
+      `SELECT * FROM students WHERE studentId = ?`,
+      [studentId],
     );
-    client.query('COMMIT');
 
-    if (existingStudent.rows[0]) {
-      return handleError(res, 409, 'Student already exist');
+    if (existingStudent.length > 0) {
+      return handleError(res, 409, 'Student already exists');
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const newStudent = await client.query(
-      `INSERT INTO student
-            VALUES ($1, $2, $3, $4, $5)
-            RETURNING *`,
-      [id, name, email, phone, hashedPassword],
+    const [result] = await db.execute(
+      `INSERT INTO students (studentId, name, email, phone, password, courseId, status, createdAt)
+       VALUES (?, ?, ?, ?, ?, ?, 'active', NOW())`,
+      [studentId, name, email, phone, hashedPassword, courseId || null],
     );
 
-    client.query('COMMIT');
-    newStudent.rows[0].password_hash = undefined;
-    //Send registration mail
-    sendRegistrationSuccessMail(
-      newStudent.rows[0].name,
-      newStudent.rows[0].email,
-      newStudent.rows[0].id,
+    const [newStudent] = await db.execute(
+      'SELECT * FROM students WHERE studentId = ?',
+      [studentId]
     );
+
+    // Remove password from response
+    delete newStudent[0].password;
+    
+    // Send registration mail
+    sendRegistrationSuccessMail(
+      newStudent[0].name,
+      newStudent[0].email,
+      newStudent[0].studentId,
+    );
+    
     return handleResponse(
       res,
       201,
       'Student registered successfully',
-      newStudent.rows[0],
+      newStudent[0],
     );
   } catch (error) {
-    client.query('ROLLBACK');
+    console.error('Error registering student:', error);
     return handleError(res, 500, 'Error registering student', error);
-  } finally {
-    client.release();
   }
 };
 
 exports.getAllStudent = async (req, res) => {
-  let client;
   try {
-    client = await connect();
-
-    const students = await client.query(
-      `SELECT * FROM student ORDER BY name ASC`,
+    const [students] = await db.execute(
+      `SELECT studentId, name, email, phone, courseId, status, createdAt FROM students ORDER BY name ASC`,
     );
 
-    if (!students.rows) {
-      return handleError(res, 409, 'No student found');
+    if (!students.length) {
+      return handleError(res, 409, 'No students found');
     }
-
-    await students.rows.forEach((s) => (s.password_hash = undefined));
 
     return handleResponse(
       res,
       200,
       'Students retrieved successfully',
-      students.rows,
+      students,
     );
   } catch (error) {
-    return handleError(res, 500, 'Error retrieving students');
-  } finally {
-    client.release();
+    console.error('Error retrieving students:', error);
+    return handleError(res, 500, 'Error retrieving students', error);
   }
 };
 
 exports.getStudentById = async (req, res) => {
-  let client;
   try {
     const { id } = req.params;
-    client = await connect();
-    const student = await client.query(
-      `
-            SELECT 
-            student.*,
-            ARRAY_AGG(
-              JSONB_BUILD_OBJECT(
-                'group_id', groups.id,
-                'group_name', groups.name,
-                'is_leader', group_member.isleader
-              )
-            ) AS groups
-          FROM student
-          LEFT JOIN group_member ON student.id = group_member.studentid
-          LEFT JOIN groups ON group_member.groupid = groups.id
-          WHERE student.id = $1
-          GROUP BY student.id;`,
+    
+    const [student] = await db.execute(
+      `SELECT 
+        s.studentId,
+        s.name,
+        s.email,
+        s.phone,
+        s.courseId,
+        s.status,
+        s.createdAt,
+        c.courseName,
+        c.courseCode
+      FROM students s
+      LEFT JOIN courses c ON s.courseId = c.courseId
+      WHERE s.studentId = ?`,
       [id],
     );
-    if (!student.rows) {
+    
+    if (!student.length) {
       return handleError(res, 404, 'Student not found');
     }
 
-    student.rows[0].password_hash = undefined;
+    // Get student groups
+    const [groups] = await db.execute(
+      `SELECT 
+        g.groupId,
+        g.groupName,
+        gm.isLeader
+      FROM groupMembers gm
+      LEFT JOIN groups g ON gm.groupId = g.groupId
+      WHERE gm.studentId = ?`,
+      [id]
+    );
+
+    const studentData = {
+      ...student[0],
+      groups: groups
+    };
 
     return handleResponse(
       res,
       200,
       'Student retrieved successfully',
-      student.rows[0],
+      studentData,
     );
   } catch (error) {
+    console.error('Error retrieving student:', error);
     return handleError(res, 500, 'Error retrieving student', error);
-  } finally {
-    client.release();
   }
 };
 
 exports.updateStudent = async (req, res) => {
-  let client;
   try {
     const { id } = req.params;
-    const { name, email, phone } = req.body;
-    client = await connect();
+    const { name, email, phone, courseId, status } = req.body;
 
-    const updatedStudent = await client.query(
-      `UPDATE student SET
-            name = $1,
-            email = $2,
-            phone = $3
-            WHERE id = $4
-            RETURNING *;
-            `,
-      [name, email, phone, id],
+    const [result] = await db.execute(
+      `UPDATE students SET
+        name = ?,
+        email = ?,
+        phone = ?,
+        courseId = ?,
+        status = ?
+        WHERE studentId = ?`,
+      [name, email, phone, courseId || null, status || 'active', id],
     );
 
-    if (!updatedStudent.rows) {
+    if (result.affectedRows === 0) {
       return handleError(res, 404, 'Student not found for update');
     }
 
-    updatedStudent.rows[0].password_hash = undefined;
+    const [updatedStudent] = await db.execute(
+      'SELECT studentId, name, email, phone, courseId, status, createdAt FROM students WHERE studentId = ?',
+      [id]
+    );
+
     return handleResponse(
       res,
       200,
       'Student updated successfully',
-      updatedStudent.rows[0],
+      updatedStudent[0],
     );
   } catch (error) {
+    console.error('Error updating student:', error);
     return handleError(res, 500, 'Error updating student', error);
-  } finally {
-    client.release();
   }
 };
 
 exports.deleteStudent = async (req, res) => {
-  let client;
   try {
     const { id } = req.params;
-    client = await connect();
 
-    await client.query(`DELETE FROM student WHERE id = $1`, [id]);
+    const [result] = await db.execute(`DELETE FROM students WHERE studentId = ?`, [id]);
+
+    if (result.affectedRows === 0) {
+      return handleError(res, 404, 'Student not found');
+    }
 
     return handleResponse(res, 200, 'Student deleted successfully');
   } catch (error) {
+    console.error('Error deleting student:', error);
     return handleError(res, 500, 'Error deleting student', error);
-  } finally {
-    client.release();
   }
 };

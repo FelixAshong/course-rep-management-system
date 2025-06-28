@@ -1,103 +1,115 @@
 const { handleError } = require('../services/errorService');
 const { handleResponse } = require('../services/responseService');
-const { connect } = require('../config/db');
+const db = require('../config/db');
 
 exports.addCourse = async (req, res) => {
-  let client;
   try {
-    client = await connect();
-    client.query('BEGIN');
-    const { id, name, lecturerId, day, startTime, endTime, semester } =
-      req.body;
+    const { courseId, courseName, courseCode, lecturerId, description, credits, semester } = req.body;
 
-    if (
-      (!id || !name || !lecturerId || !day || !startTime || !endTime, !semester)
-    ) {
+    if (!courseId || !courseName || !courseCode || !lecturerId) {
       return handleError(
         res,
         409,
-        'id, name, lecturerId, day, start time, end time, and semester is required',
+        'Course ID, course name, course code, and lecturer ID are required',
       );
     }
 
-    const newCourse = await client.query(
-      `INSERT INTO course (id, name, lecturerId, day, start_time, end_time, semester)
-        VALUES($1, $2, $3, $4, $5, $6, $7)
-        RETURNING *`,
-      [id, name, lecturerId, day, startTime, endTime, semester],
-    );
+    const connection = await db.getConnection();
+    await connection.beginTransaction();
 
-    const students = await client.query(`SELECT id FROM student`);
-
-    for (const student of students.rows) {
-      await client.query(
-        `INSERT INTO course_student (courseId, studentId)
-        VALUES ($1, $2)`,
-        [newCourse.rows[0].id, student.id],
+    try {
+      const [result] = await connection.execute(
+        `INSERT INTO courses (courseId, courseName, courseCode, lecturerId, description, credits, semester, createdAt)
+         VALUES (?, ?, ?, ?, ?, ?, ?, NOW())`,
+        [courseId, courseName, courseCode, lecturerId, description || null, credits || 3, semester || 'Fall 2024'],
       );
-    }
-    client.query('COMMIT');
 
-    return handleResponse(
-      res,
-      201,
-      'Course added successfully',
-      newCourse.rows[0],
-    );
+      await connection.commit();
+
+      const [newCourse] = await db.execute(
+        'SELECT * FROM courses WHERE courseId = ?',
+        [courseId]
+      );
+
+      return handleResponse(
+        res,
+        201,
+        'Course added successfully',
+        newCourse[0],
+      );
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
   } catch (error) {
-    client.query('ROLLBACK');
+    console.error('Error adding course:', error);
     return handleError(res, 500, 'Error adding course', error);
-  } finally {
-    client.release();
   }
 };
 
 exports.getAllCourse = async (req, res) => {
-  let client;
   try {
-    client = await connect();
-    const courses = await client.query(`SELECT * FROM course`);
+    const [courses] = await db.execute(`
+      SELECT 
+        c.courseId,
+        c.courseName,
+        c.courseCode,
+        c.description,
+        c.credits,
+        c.semester,
+        c.createdAt,
+        l.name as lecturerName,
+        l.email as lecturerEmail
+      FROM courses c
+      LEFT JOIN lecturers l ON c.lecturerId = l.lecturerId
+      ORDER BY c.courseName ASC
+    `);
 
-    if (!courses.rows) {
-      return handleError(res, 404, 'No course was found');
+    if (!courses.length) {
+      return handleError(res, 404, 'No courses found');
     }
 
     return handleResponse(
       res,
       200,
       'Courses retrieved successfully',
-      courses.rows,
+      courses,
     );
   } catch (error) {
+    console.error('Error retrieving courses:', error);
     return handleError(res, 500, 'Error retrieving courses', error);
-  } finally {
-    client.release();
   }
 };
 
 exports.getCourseById = async (req, res) => {
-  let client;
   try {
     const { id } = req.params;
-    client = await connect();
-    const course = await client.query(
-      `
-            SELECT 
-            course.*, 
-            lecturer.id AS lecturer_id, 
-            lecturer.name AS lecturer_name, 
-            lecturer.email AS lecturer_email, 
-            lecturer.phone AS lecturer_phone,
-            COUNT(course_student.studentid) AS total_students
-            FROM course
-            LEFT JOIN lecturer ON course.lecturerid = lecturer.id
-            LEFT JOIN course_student ON course.id = course_student.courseid
-            WHERE course.id = $1
-            GROUP BY course.id, lecturer.id;`,
+    
+    const [course] = await db.execute(
+      `SELECT 
+        c.courseId,
+        c.courseName,
+        c.courseCode,
+        c.description,
+        c.credits,
+        c.semester,
+        c.createdAt,
+        l.lecturerId,
+        l.name AS lecturerName,
+        l.email AS lecturerEmail,
+        l.phone AS lecturerPhone,
+        COUNT(s.studentId) AS totalStudents
+      FROM courses c
+      LEFT JOIN lecturers l ON c.lecturerId = l.lecturerId
+      LEFT JOIN students s ON c.courseId = s.courseId
+      WHERE c.courseId = ?
+      GROUP BY c.courseId, l.lecturerId`,
       [id],
     );
 
-    if (!course.rows) {
+    if (!course.length) {
       return handleError(res, 404, 'Course not found');
     }
 
@@ -105,68 +117,73 @@ exports.getCourseById = async (req, res) => {
       res,
       200,
       'Course retrieved successfully',
-      course.rows[0],
+      course[0],
     );
   } catch (error) {
+    console.error('Error retrieving course:', error);
     return handleError(res, 500, 'Error retrieving course', error);
-  } finally {
-    client.release();
   }
 };
 
 exports.updateCourse = async (req, res) => {
-  let client;
   try {
     const { id } = req.params;
-    const { name, lecturerId, day, startTime, endTime, semester } = req.body;
-    client = await connect();
+    const { courseName, courseCode, lecturerId, description, credits, semester } = req.body;
 
-    const updatedCourse = await client.query(
-      `UPDATE course
-     SET name = $1,
-         lecturerId = $2,
-         day = $3,
-         start_time = $4,
-         end_time = $5,
-         semester = $6
-   WHERE id = $7
-   RETURNING *;`,
-      [name, lecturerId, day, startTime, endTime, semester, id],
+    const [result] = await db.execute(
+      `UPDATE courses
+       SET courseName = ?,
+           courseCode = ?,
+           lecturerId = ?,
+           description = ?,
+           credits = ?,
+           semester = ?
+       WHERE courseId = ?`,
+      [courseName, courseCode, lecturerId, description || null, credits || 3, semester || 'Fall 2024', id],
     );
+
+    if (result.affectedRows === 0) {
+      return handleError(res, 404, 'Course not found for update');
+    }
+
+    const [updatedCourse] = await db.execute(
+      'SELECT * FROM courses WHERE courseId = ?',
+      [id]
+    );
+
     return handleResponse(
       res,
       200,
       'Course updated successfully',
-      updatedCourse.rows[0],
+      updatedCourse[0],
     );
   } catch (error) {
+    console.error('Error updating course:', error);
     return handleError(res, 500, 'Error updating course', error);
-  } finally {
-    client.release();
   }
 };
 
 exports.deleteCourse = async (req, res) => {
-  let client;
   try {
     const { id } = req.params;
-    client = await connect();
 
-    await client.query(`DELETE FROM course WHERE id = $1`, [id]);
+    const [result] = await db.execute(`DELETE FROM courses WHERE courseId = ?`, [id]);
+
+    if (result.affectedRows === 0) {
+      return handleError(res, 404, 'Course not found');
+    }
 
     return handleResponse(res, 200, 'Course deleted successfully');
   } catch (error) {
+    console.error('Error deleting course:', error);
     return handleError(res, 500, 'Error deleting course', error);
-  } finally {
-    client.release();
   }
 };
 
 exports.registerCourse = async (req, res) => {
-  let client;
   try {
     const { courseId, studentId } = req.body;
-    client = await connect();
+    
     if (!courseId || !studentId) {
       return handleError(
         res,
@@ -175,37 +192,26 @@ exports.registerCourse = async (req, res) => {
       );
     }
 
-    const registeredCourse = await client.query(
-      `SELECT is_register FROM course_student WHERE courseId = $1 AND studentId = $2`,
+    // Check if student is already registered for this course
+    const [existingRegistration] = await db.execute(
+      `SELECT * FROM students WHERE studentId = ? AND courseId = ?`,
+      [studentId, courseId],
+    );
+
+    if (existingRegistration.length > 0) {
+      return handleError(res, 409, 'Student already registered for this course');
+    }
+
+    // Register student for the course
+    await db.execute(
+      `UPDATE students SET courseId = ? WHERE studentId = ?`,
       [courseId, studentId],
     );
 
-    if (!registeredCourse.rows.length) {
-      await client.query(
-        `INSERT INTO course_student (courseId, studentId, is_register)
-      VALUES($1, $2, $3)`,
-        [courseId, studentId, true],
-      );
-      return handleResponse(res, 201, 'Course registered successfully');
-    }
-
-    if (registeredCourse.rows[0].is_register) {
-      return handleError(res, 409, 'Course already registered');
-    } else if (!registeredCourse.rows[0].is_register) {
-      await client.query(
-        `UPDATE course_student
-          SET is_register = $1
-          WHERE courseId = $2 AND studentId = $3`,
-        [true, courseId, studentId],
-      );
-      return handleResponse(res, 200, 'Course register successfully');
-    }
+    return handleResponse(res, 201, 'Course registered successfully');
   } catch (error) {
+    console.error('Error registering course:', error);
     return handleError(res, 500, 'Error registering course', error);
-  } finally {
-    if (client) {
-      client.release();
-    }
   }
 };
 

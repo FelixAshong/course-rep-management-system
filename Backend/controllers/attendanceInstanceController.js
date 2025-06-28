@@ -1,4 +1,4 @@
-const { connect } = require('../config/db');
+const db = require('../config/db');
 const { generatedId, generateQR } = require('../services/customServices');
 const { handleError } = require('../services/errorService');
 const { handleResponse } = require('../services/responseService');
@@ -6,7 +6,6 @@ const jwt = require('jsonwebtoken');
 const { getDistance } = require('geolib');
 
 exports.attendanceInstance = async (req, res) => {
-  let client;
   try {
     const { courseId, date, classType } = req.body;
 
@@ -47,92 +46,95 @@ exports.attendanceInstance = async (req, res) => {
       longitude = req.body.longitude || 0;
     }
 
-    client = await connect();
-    await client.query('BEGIN');
+    const connection = await db.getConnection();
+    await connection.beginTransaction();
 
-    const id = await generatedId('ATT_INT');
-    const qrTokenExpiration = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+    try {
+      const id = await generatedId('ATT_INT');
+      const qrTokenExpiration = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
 
-    // Token payload includes class type
-    const tokenPayload = {
-      courseId,
-      instanceId: id,
-      classType,
-      latitude,
-      longitude,
-    };
-
-    const qrToken = jwt.sign(tokenPayload, process.env.JWT_SECRET, {
-      expiresIn: '15m',
-    });
-
-    // Store in database including class type
-    const { rows } = await client.query(
-      `INSERT INTO attendance_instance 
-        (id, courseId, date, qr_token, expires_at, latitude, longitude, class_type)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-        RETURNING id, courseId, date, expires_at, class_type;`,
-      [
-        id,
+      // Token payload includes class type
+      const tokenPayload = {
         courseId,
-        date,
-        qrToken,
-        qrTokenExpiration,
+        instanceId: id,
+        classType,
         latitude,
         longitude,
-        classType,
-      ],
-    );
+      };
 
-    // Create attendance records for students
-    const students = await client.query(
-      `SELECT s.id AS studentId
-       FROM COURSE_STUDENT cs
-       JOIN STUDENT s ON cs.studentId = s.id
-       WHERE cs.courseId = $1 AND s.status = 'active'`,
-      [courseId],
-    );
+      const qrToken = jwt.sign(tokenPayload, process.env.JWT_SECRET, {
+        expiresIn: '15m',
+      });
 
-    for (const student of students.rows) {
-      const attendanceId = await generatedId('ATT');
-      await client.query(
-        `INSERT INTO attendance (id, instanceId, courseId, date, studentId, status)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [attendanceId, id, courseId, date, student.studentid, 'absent'],
+      // Store in database including class type
+      const [result] = await connection.execute(
+        `INSERT INTO attendanceInstances 
+          (attendanceInstanceId, courseId, date, qrToken, expiresAt, latitude, longitude, classType)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          id,
+          courseId,
+          date,
+          qrToken,
+          qrTokenExpiration,
+          latitude,
+          longitude,
+          classType,
+        ],
       );
+
+      // Create attendance records for students
+      const [students] = await connection.execute(
+        `SELECT s.studentId
+         FROM students s
+         WHERE s.courseId = ? AND s.status = 'active'`,
+        [courseId],
+      );
+
+      for (const student of students) {
+        const attendanceId = await generatedId('ATT');
+        await connection.execute(
+          `INSERT INTO attendanceInstances (attendanceInstanceId, courseId, date, studentId, status)
+           VALUES (?, ?, ?, ?, ?)`,
+          [attendanceId, courseId, date, student.studentId, 'absent'],
+        );
+      }
+      
+      await connection.commit();
+
+      // Use a shorter QR code value to prevent "Data too long" error
+      const qrCodeValue = `ATT-${id}`;
+      const qrImage = await generateQR(qrCodeValue);
+
+      res.status(201).json({
+        success: true,
+        message: 'Attendance initialized successfully',
+        classType: classType,
+        qrCode: qrCodeValue,
+        data: { attendanceInstanceId: id, courseId, date, expiresAt: qrTokenExpiration, classType },
+      });
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
     }
-    await client.query('COMMIT');
-
-    // Use a shorter QR code value to prevent "Data too long" error
-    const qrCodeValue = `ATT-${id}`;
-    const qrImage = await generateQR(qrCodeValue);
-
-    res.status(201).json({
-      success: true,
-      message: 'Attendance initialized successfully',
-      classType: classType,
-      qrCode: qrCodeValue,
-      data: rows[0],
-    });
   } catch (error) {
-    await client.query('ROLLBACK');
+    console.error('Error initializing attendance:', error);
     handleError(res, 500, 'Error initializing attendance', error);
-  } finally {
-    if (client) client.release();
   }
 };
 
 exports.closeAttendance = async (req, res) => {
-  let client;
   try {
     const { instanceId } = req.query;
-    client = await connect();
+    
     if (!instanceId) {
       return handleError(res, 409, 'Instance ID required');
     }
 
-    const { rows } = await client.query(
-      `SELECT is_close FROM attendance_instance WHERE id = $1`,
+    const [rows] = await db.execute(
+      `SELECT isClosed FROM attendanceInstances WHERE attendanceInstanceId = ?`,
       [instanceId],
     );
 
@@ -140,39 +142,35 @@ exports.closeAttendance = async (req, res) => {
       return handleError(res, 404, 'Attendance not found');
     }
 
-    rows[0].is_close
-      ? handleError(res, 401, 'Attendance already closed')
-      : await client.query(
-          `UPDATE attendance_instance
-                SET is_close = $1,
-                qr_token = $2
-                WHERE id = $3`,
-          [true, '', instanceId],
-        );
+    if (rows[0].isClosed) {
+      return handleError(res, 401, 'Attendance already closed');
+    }
+    
+    await db.execute(
+      `UPDATE attendanceInstances
+       SET isClosed = ?, qrToken = ?
+       WHERE attendanceInstanceId = ?`,
+      [true, '', instanceId],
+    );
+    
     return handleResponse(res, 200, 'Attendance successfully closed');
   } catch (error) {
+    console.error('Error closing attendance:', error);
     return handleError(res, 500, 'Error closing attendance', error);
-  } finally {
-    if (client) {
-      client.release();
-    }
   }
 };
 
 exports.allAttendanceInstance = async (req, res) => {
-  let client;
   try {
-    client = await connect();
-
-    const { rows } = await client.query(
+    const [rows] = await db.execute(
       `SELECT 
-            id,
-            courseid AS course_id,
-            date, 
-            expires_at,
-            class_type,
-            is_close
-         FROM attendance_instance`,
+        attendanceInstanceId,
+        courseId,
+        date, 
+        expiresAt,
+        classType,
+        isClosed
+       FROM attendanceInstances`,
     );
 
     if (rows.length === 0) {
@@ -181,40 +179,37 @@ exports.allAttendanceInstance = async (req, res) => {
 
     return handleResponse(res, 200, 'Instances successfully retrieved', rows);
   } catch (error) {
+    console.error('Error retrieving attendance instances:', error);
     return handleError(
       res,
       500,
       'Error retrieving attendance instances',
       error,
     );
-  } finally {
-    if (client) {
-      client.release();
-    }
   }
 };
 
 exports.deleteInstance = async (req, res) => {
-  let client;
   try {
     const { instanceId } = req.params;
-    client = await connect();
 
-    await client.query(`DELETE FROM attendance_instance WHERE id = $1`, [
-      instanceId,
-    ]);
-
-    return handleResponse(
-      res,
-      200,
-      'Instance and all related attendance deleted successfully',
-    );
-  } catch (error) {
-    return handleError(res, 500, 'Error deleting attendance instance', error);
-  } finally {
-    if (client) {
-      client.release();
+    if (!instanceId) {
+      return handleError(res, 409, 'Instance ID required');
     }
+
+    const [result] = await db.execute(
+      `DELETE FROM attendanceInstances WHERE attendanceInstanceId = ?`,
+      [instanceId],
+    );
+
+    if (result.affectedRows === 0) {
+      return handleError(res, 404, 'Instance not found');
+    }
+
+    return handleResponse(res, 200, 'Instance deleted successfully');
+  } catch (error) {
+    console.error('Error deleting instance:', error);
+    return handleError(res, 500, 'Error deleting instance', error);
   }
 };
 
