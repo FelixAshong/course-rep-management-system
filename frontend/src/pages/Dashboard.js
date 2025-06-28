@@ -10,8 +10,6 @@ import {
   Button,
   Chip,
   Avatar,
-  LinearProgress,
-  IconButton,
 } from '@mui/material';
 import {
   People,
@@ -21,17 +19,14 @@ import {
   Event,
   QrCode,
   Feedback,
-  Notifications,
   TrendingUp,
   TrendingDown,
   Add,
-  MoreVert,
   CalendarToday,
   CheckCircle,
   Schedule,
-  Warning,
 } from '@mui/icons-material';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import axios from 'axios';
 
 const MotionCard = motion(Card);
