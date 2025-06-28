@@ -35,7 +35,7 @@ representatives.
 
 ## Project Structure
 
-```
+```text
 course-rep-management-system/
 ├── Backend/                 # Node.js/Express backend
 │   ├── controllers/         # Route controllers
